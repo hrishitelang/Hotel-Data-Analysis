@@ -1,0 +1,870 @@
+
+#1.
+```{r}
+#We enable the packages we'll use
+library(readr)
+#Import the csv file with the data as a data frame
+dataset1 <- read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/Resort01.csv")
+View(dataset1)
+```
+#2.
+```{r}
+#We check if there are missing values
+for (val in c(1:20))
+{
+print(sum(is.na(dataset1[,val])))
+}
+#I can see from the previous outputs that there aren't missing values
+```
+
+#3.
+```{r}
+#we check the structure of the data frame
+str(dataset1)
+#we can see there are some variables that should be factors, but they aren't
+```
+
+#4.
+```{r}
+#we convert those variables to categorical ones.
+dataset1$IsCanceled <- as.factor(dataset1$IsCanceled)
+dataset1$Meal <- as.factor(dataset1$Meal)
+dataset1$Country <- as.factor(dataset1$Country)
+dataset1$MarketSegment <- as.factor(dataset1$MarketSegment)
+dataset1$IsRepeatedGuest <- as.factor(dataset1$IsRepeatedGuest)
+dataset1$ReservedRoomType <- as.factor(dataset1$ReservedRoomType)
+dataset1$AssignedRoomType <- as.factor(dataset1$AssignedRoomType)
+dataset1$CustomerType <- as.factor(dataset1$CustomerType)
+dataset1$DepositType <- as.factor(dataset1$DepositType)
+```
+
+#5.
+```{r}
+str(dataset1)
+```
+
+```{r}
+dataset1[is.na(dataset1)] <- NA
+dataset1
+```
+
+#6.
+```{r}
+#install.packages("reshape")                                       # Install reshape package
+library("reshape")                                                # Load reshape package
+dataset2 <- dataset1
+dataset2[ , c(1, 8, 9, 10, 11, 14, 15, 17, 18)] <- list(NULL)
+dataset2
+```
+```{r}
+pairs(~LeadTime+StaysInWeekendNights+StaysInWeekNights, data = dataset2,
+   main = "Scatterplot Matrix")
+```
+
+```{r}
+library(ggplot2)
+ggplot(dataset2, aes(x=StaysInWeekendNights, y=StaysInWeekNights)) + geom_point()+geom_smooth(method=lm, se=FALSE)
+```
+
+
+```{r}
+pairs(~Adults+Children+Babies+PreviousCancellations, data = dataset2,
+   main = "Scatterplot Matrix")
+```
+```{r}
+pairs(~PreviousBookingsNotCanceled+BookingChanges+RequiredCarParkingSpaces+TotalOfSpecialRequests, data = dataset2,
+   main = "Scatterplot Matrix")
+```
+
+```{r}
+library(plyr)
+#install.packages('psych')
+library(psych)
+multi.hist(dataset2[,sapply(dataset2, is.numeric)])
+```
+```{r}
+ggplot(dataset2, aes(x=Adults, y=LeadTime)) + geom_violin()
+```
+
+```{r}
+ggplot(dataset2, aes(x=Children, y=StaysInWeekendNights)) + geom_violin()
+```
+
+```{r}
+#install.packages('skimr')
+library(skimr) #To give feature statistics for eg. missing values statistics
+skimmed <- skim(dataset1)
+skimmed
+```
+
+#We are checking if there are any missing values in the dataset
+```{r}
+#install.packages('DataExplorer')
+library(DataExplorer) #Automated data exploration process for analytic tasks and predictive modeling
+plot_missing(dataset1)
+```
+#There were no missing values in this dataset. That's great. Let's move on:
+
+```{r}
+library(psych)#Functions are primarily for multivariate analysis and scale construction using factor analysis, principal component analysis, cluster analysis and reliability analysis
+psych::describe(dataset1)
+#describeBy(dataset1, dataset1$hotel)
+```
+#This plot tries to illustrate the booking and cancellation pattern based on the room type offered to the customer. We can observe that Room type A were booked and cancelled the most number of times.
+```{r}
+library(ggplot2)
+ggplot(dataset1,aes(x=factor(AssignedRoomType),fill=factor(IsCanceled))) + geom_bar() + theme(axis.text.x = element_text(face="bold", size=15),axis.text.y = element_text(face="bold", size=15)) +
+  
+labs(
+    title = "Cancellation based on Room Type",
+    x = "Room Type",
+    y = "No. of Bookings",size=15
+  ) +
+   
+scale_fill_manual(
+    name = "Booking Status",
+    breaks = c("0", "1"),
+    labels = c("Not Cancelled", "Cancelled"),
+    values = c("0" = "red", "1"="yellow")
+  )
+```
+#This plot tries to illustrate the Booking vs Cancellation Pattern based on the Distribution Channel. Rooms booked through Online Travel Agents were booked and cancelled the most number of times. This means that the trend of online booking through travel agents is more significant.
+```{r}
+library(ggplot2)
+ggplot(dataset1,aes(x=factor(MarketSegment),fill=factor(IsCanceled)))+
+  
+geom_bar()+theme(axis.text.x = element_text(face="bold", size=15),axis.text.y = element_text(face="bold", size=15))+
+  
+labs(
+    title = "Cancellation based on Distribution Type",
+    x = "Distribution Type",
+    y = "No. of Bookings",size=15) +
+   
+scale_fill_manual(
+    name = "Booking Status",
+    breaks = c("0", "1"),
+    labels = c("Not Cancelled", "Cancelled"),
+    values = c("0" = "red", "1"="blue")
+  )
+```
+#I used ggplot to calculate the frequency of LeadTime against isCanceled
+```{r}
+ggplot(data = dataset1 , aes(LeadTime)) + geom_histogram(binwidth = 0.8) + facet_wrap(~ IsCanceled[1]) 
+```
+#I tried plotting a scatterplot with leadtime against TotalNights
+```{r}
+library(MASS) #Call library MASS
+library(ggplot2) #Call library ggplot2
+ggplot(data=dataset1) + aes(x= LeadTime, y=TotalNights) + geom_point() + geom_smooth(method="lm", se=FALSE)
+```
+#We can observe that the bookings are the highest when done through an online Travel Agent. It also guarantees that through online travel agents, there is a greater probability of no cancellations.
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$MarketSegment, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for MarketSegment",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red", "green", "yellow", "orange"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+#There is a higher probability of customers to not cancel their booking if the deposit type is no deposit as compared to something that is non-refundable.
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$DepositType, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for DepositType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+#Customers generally prefer no deposit based bookings
+```{r}
+#try to get me a plot with market segement, deposit type
+
+# Table cylinder - transmission type
+other_table <- table(dataset1$MarketSegment, dataset1$DepositType)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for MarketSegment",
+        xlab = "Deposit Type", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red", "green", "yellow", "orange"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$StaysInWeekendNights, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for StaysInWeekendNights",
+        xlab = "StaysInWeekendNights", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red", "green", "yellow", "orange"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+other_table <- table(dataset1$StaysInWeekNights, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for StaysInWeekendNights",
+        xlab = "StaysInWeekNights", ylab = "Frequency",
+        col = c("violet", "brown", "blue", "green", "yellow", "orange", "red"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+#We can observe that transient customers are least likely to change their booking, as compared to groups
+```{r}
+other_table <- table(dataset1$StaysInWeekNights, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for StaysInWeekNights",
+        xlab = "Customer Type", ylab = "Frequency",
+        col = c("violet", "brown", "blue", "green", "yellow", "orange", "red"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+other_table <- table(dataset1$TotalOfSpecialRequests, dataset1$CustomerType)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for Booking Changes",
+        xlab = "Customer Type", ylab = "Frequency",
+        col = c("violet", "brown", "blue", "green", "yellow", "orange"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+#Transient customers do not want to be bound by a restriction, that is why they prefer hotels that do not ask for deposit
+```{r}
+other_table <- table(dataset1$DepositType, dataset1$CustomerType)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for Deposit Type",
+        xlab = "Deposit Type", ylab = "Frequency",
+        col = c("blue", "green", "yellow"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+dataset1$TotalFamilyMembers <- dataset1$Adults + dataset1$Children + dataset1$Babies
+```
+
+
+```{r}
+other_table <- table(dataset1$DepositType, dataset1$AssignedRoomType)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for Deposit Type vs Assigned Room Type",
+        xlab = "TotalFamilyMembers", ylab = "Frequency",
+        col = c("violet", "brown", "blue"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$Meal, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for Meal",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("cyan", "red", "green", "blue", "yellow"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$Meal, dataset1$CustomerType)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for Meal",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("cyan", "red", "green", "blue", "yellow"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$IsRepeatedGuest, dataset1$IsCanceled)
+
+barplot(other_table,
+        main = "Grouped barchart for IsRepeatedGuest",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$ReservedRoomType, dataset1$IsCanceled)
+
+barplot(other_table,
+        main = "Grouped barchart for ReservedRoomType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "plum1", "grey", "violet", "green", "cyan", "slateblue", "blue"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+#We can also observe in this following bar graph that A and D rooms are the highest for both
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$AssignedRoomType, dataset1$IsCanceled)
+
+barplot(other_table,
+        main = "Grouped barchart for AssignedRoomType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey", "violet", "green", "brown", "slateblue", "blue","orchid"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$AssignedRoomType, dataset1$CustomerType)
+
+barplot(other_table,
+        main = "Grouped barchart for AssignedRoomType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey", "violet", "green", "brown", "slateblue", "blue","orchid"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+#a<- table(dataset1$LeadTime, dataset1$AssignedRoomType)
+#a %>% filter(a , dataset1$IsCanceled == 0)
+a <- dataset1 %>% filter(dataset1$LeadTime > 365, dataset1$IsCanceled == 0)
+table(a$Country) #%>% order(a$Country)
+table(a$LeadTime, a$AssignedRoomType)
+b <- dataset1 %>% filter(dataset1$TotalNights == 0, dataset1$IsCanceled == 0)
+b
+table(b$LeadTime, b$AssignedRoomType)[1,]
+```
+```{r}
+other_table <- table(b$LeadTime, b$AssignedRoomType)[1,]
+
+barplot(other_table,
+        main = "Customers who stayed for 0 Nights but did not cancel",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey", "violet", "green", "brown", "slateblue", "blue","orchid"),
+        #legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$CustomerType, dataset1$IsCanceled)
+
+barplot(other_table,
+        main = "Grouped barchart for CustomerType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("cyan", "grey", "violet", "green"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+
+```{r}
+pct <- round(100*table(dataset1$CustomerType)/sum(table(dataset1$CustomerType)), 2)
+mytable <- table(dataset1$CustomerType)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of CustomerType\n (with sample sizes)")
+```
+#Portugal, Spain and the UK make up most of the percentages of bookings.
+```{r}
+pct <- round(100*table(dataset1$Country)/sum(table(dataset1$Country)), 2)
+mytable <- table(dataset1$Country)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of Country", radius=1)
+```
+```{r}
+pct <- round(100*table(dataset1$IsCanceled)/sum(table(dataset1$IsCanceled)), 2)
+mytable <- table(dataset1$IsCanceled)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of IsCanceled", radius=1)
+```
+#Rooms A are more booked than Rooms D. But according to association rules mining, the probably of not cancelling is higher when the assigned room type is D. This could also mean that the number of room Type of D is much lesser than that of A, and when the rooms of D get full, A becomes the only option of rooms.
+```{r}
+pct <- round(100*table(dataset1$ReservedRoomType)/sum(table(dataset1$ReservedRoomType)), 2)
+mytable <- table(dataset1$ReservedRoomType)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of ReservedRoomType", radius=1)
+```
+```{r}
+pct <- round(100*table(dataset1$AssignedRoomType)/sum(table(dataset1$AssignedRoomType)), 2)
+mytable <- table(dataset1$AssignedRoomType)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of AssignedRoomType", radius=1)
+```
+
+```{r}
+pct <- round(100*table(dataset1$DepositType)/sum(table(dataset1$DepositType)), 2)
+mytable <- table(dataset1$DepositType)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of DepositType", radius=1)
+```
+
+```{r}
+pct <- round(100*table(dataset1$CustomerType)/sum(table(dataset1$CustomerType)), 2)
+mytable <- table(dataset1$CustomerType)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of CustomerType", radius=1)
+```
+```{r}
+pct <- round(100*table(dataset1$BookingChanges)/sum(table(dataset1$BookingChanges)), 2)
+mytable <- table(dataset1$BookingChanges)[1:4]
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of BookingChanges", radius=1)
+```
+```{r}
+pct <- round(100*table(dataset1$TotalFamilyMembers)/sum(table(dataset1$TotalFamilyMembers)), 2)
+mytable <- table(dataset1$TotalFamilyMembers)[1:5]
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of TotalFamilyMembers", radius=1)
+```
+```{r}
+dataset1$TotalNights <- dataset1$StaysInWeekNights + dataset1$StaysInWeekNights
+```
+
+```{r}
+pct <- round(100*table(dataset1$TotalNights)/sum(table(dataset1$TotalNights)), 2)
+mytable <- table(dataset1$TotalNights)
+lbls <- paste(names(mytable), "\n", sep = " ", pct, "%")
+pie(mytable, labels = lbls, 
+   main="Pie Chart of TotalNights", radius=1)
+```
+#We can observe that for every single cancellation of a booking, there is a higher probability of a potential previous cancellation as well.
+```{r}
+library(ggplot2)
+# Basic barplot
+ggplot(data=dataset1, aes(x=IsCanceled, y=PreviousCancellations)) + geom_bar(stat="identity")
+```
+```{r}
+ggplot(data=dataset1, aes(x=IsCanceled, y=IsRepeatedGuest)) + geom_bar(stat="identity")
+```
+```{r}
+ggplot(dataset1, aes(x=LeadTime, y=PreviousCancellations)) + geom_point()+ geom_smooth(method=lm)
+```
+
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$PreviousCancellations, dataset1$IsCanceled)
+
+barplot(other_table,
+        main = "Grouped barchart for CustomerType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("cyan", "grey", "violet", "green"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+boxplot(dataset1$TotalNights, main="Boxplot of TotalNights", ylab="TotalNights")
+```
+```{r}
+boxplot(TotalNights~CustomerType, data=dataset1, main="Boxplot of TotalNights",
+   xlab="CustomerType", ylab="TotalNights")
+```
+```{r}
+boxplot(TotalNights~ReservedRoomType, data=dataset1, main="Boxplot of TotalNights",
+   xlab="ReservedRoomType", ylab="TotalNights")
+```
+#Associative Rule Mining
+```{r}
+str(dataset1) #returns the structure (datatypes) of the bank dataset
+```
+
+```{r}
+data_new <- data.frame(dataset1$Meal, dataset1$Country, dataset1$MarketSegment,
+                       dataset1$IsRepeatedGuest, dataset1$ReservedRoomType, dataset1$AssignedRoomType, dataset1$DepositType, dataset1$CustomerType, dataset1$IsCanceled)
+colnames(data_new) <- c('Meal','Country','MarketSegment', 'IsRepeatedGuest', 'ReservedRoomType', 'AssignedRoomType', 'DepositType', 'CustomerType', 'IsCanceled')
+data_new
+```
+```{r}
+nrow(data_new) #returns number of rows
+ncol(data_new) #returns number of columns
+```
+
+```{r}
+data_new <- data_new[data_new$Country!='NULL',]
+table(data_new$Country)
+```
+
+
+```{r}
+print("%%%%Meal%%%%")
+table(data_new$Meal)
+prop.table(table(data_new$Meal))
+
+print("%%%%Country%%%%")
+table(data_new$Country)
+prop.table(table(data_new$Country))
+
+print("%%%%MarketSegment%%%%")
+table(data_new$MarketSegment)
+prop.table(table(data_new$MarketSegment))
+
+print("%%%%IsRepeatedGuest%%%%")
+table(data_new$IsRepeatedGuest)
+prop.table(table(data_new$IsRepeatedGuest))
+
+print("%%%%ReservedRoomType%%%%")
+table(data_new$ReservedRoomType)
+prop.table(table(data_new$ReservedRoomType))
+
+print("%%%%AssignedRoomType%%%%")
+table(data_new$AssignedRoomType)
+prop.table(table(data_new$AssignedRoomType))
+
+print("%%%%DepositType%%%%")
+table(data_new$DepositType)
+prop.table(table(data_new$DepositType))
+
+print("%%%%CustomerType%%%%")
+table(data_new$CustomerType)
+prop.table(table(data_new$CustomerType))
+
+print("%%%%IsCanceled%%%%")
+table(data_new$IsCanceled)
+prop.table(table(data_new$IsCanceled))
+
+```
+
+```{r}
+library(arules)
+library(arulesViz)
+dataX <- as(data_new, "transactions")
+dataX
+```
+
+```{r}
+itemFrequency(dataX)
+itemFrequencyPlot(dataX, topN=25)
+```
+
+```{r}
+inspect(dataX[1:10]) 
+```
+#Some interesting insights can be acquired from the following association rule mining:
+#The cancellations are highest when:
+#1. The way to pay the deposit is non-refundable, which makes sense as deposits being non-refundable prove to be a loss for the customers in case if they were to cancel the last minute. Cancellations are of higher probability when market segment is essentially in a group. This also makes sense because if someone from the group backs out in the last minute, all the bookings of the rooms need to be cancelled.
+#2. The assigned Room Types are A. This could be the case because Rooms A are not generally the most preferred category of rooms, thus when all other rooms get booked, they assign the A room type. The reserved room type also is A. It could probably mean that A room type has traditionally been horrible in terms of living or provide poor service. This ties extremely well when deposit is non-refundable. This is probably because the customers are at a major disadvantage in case if the room is bad and if they want to leave the hotel, and that the hotel is not kind enough to give refund.
+#3. When the meal booked is half board or bed and breakfast. There is a chance that the BB plan is too minimal and might be extra costly for the customer to eat a la carte. Also HB meals might not be providing the best options for customers that lead to cancellations.
+#4. The maximum cancellations have been made in Portugal. This could happen because the travel route to Portugal might be the most inconvenient in that the transit points are too much, or the air tickets could be very expensive. It is also possible that Portugal provides HB and BB meals with extra taxes that are not inclusive
+#5. When customer type is transient (walk-in guests, last minute or bookers or simply people that require a very short term stay in a hotel). I believe that transient customers expect cheap services as they are living only for a short duration of stay.
+#6. Some instances of meal plans in Portugal provide full board meal plans when customers group book.I can also observe that when customers go in groups, they go with certain non-negotiable basic demands, which are not being met by the hotels, such as non refundable deposits which are too huge a loss for the customers to bear.
+#7. In Many of these transactions, there are 0 Repeated Guests. This means that these guests are very new to whichever hotel they have booked. This proves disadvantageous to the hotels especially in countries like Portugal as they are potentially suffering huge losses.
+```{r}
+#remember the values for support and confidence
+rules <- apriori(data_new, parameter = list(supp=0.008, conf= 0.96), 
+                  appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                  control=list(verbose=F))
+summary(rules)
+inspect(rules)
+```
+#The cancellations are lowest when:
+#1. Customers are Britons (from the UK). It is possibly because the economy base being stronger helps them to come to relatively poorer nations like Portugal to spend lavishly on items.
+#2. Rooms D seem to be the most preferred by the customers, that eventually lead to no cancellations
+#3. When there are no deposits (customers love not to owe hotel any charges)
+#4. There is a higher customer satisfaction rate if a new customer enters a hotel, reserves an A type room and gets D instead. 
+```{r}
+rules2 <- apriori(data_new, parameter = list(supp=0.07, conf= 0.9), 
+                  appearance=list(default="lhs", rhs="IsCanceled=0"), 
+                  control=list(verbose=F))
+summary(rules2)
+inspect(rules2)
+```
+```{r}
+sample3 <- data_new %>% filter(data_new$Meal == 'BB', data_new$DepositType == "No Deposit")
+sample3
+```
+```{r}
+sample3X <- as(sample3, "transactions")
+sample3X
+```
+
+```{r}
+sample3X_rules <- apriori(data_new, parameter = list(supp=0.008, conf= 1), 
+                  appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                  control=list(verbose=F))
+summary(sample3X_rules)
+inspect(sample3X_rules)
+```
+
+#MACHINE LEARNING:
+#I am creating a copy of the dataframe:
+```{r}
+dataset3 <- data.frame(dataset1)
+dim(dataset3) #dataframe dimension
+```
+
+#Head:
+```{r}
+head(dataset3)
+```
+#The dataset is split into training and testing set in 70:30 ratio with the IsCanceled feature as the dependent variable.
+```{r}
+#install.packages('caTools')
+library(caTools)
+set.seed(100)
+split <- sample.split(dataset3$IsCanceled, SplitRatio = 0.7)
+training_set1 <- subset(dataset3, split == TRUE)
+test_set1 <- subset(dataset3, split == FALSE)
+dim(training_set1)
+dim(test_set1)
+```
+
+#Checking the head of training_set1:
+```{r}
+head(training_set1)
+```
+#Checking the head of test_set1:
+```{r}
+head(test_set1)
+```
+#%%%%%%%%%%%%%%%%LOGISTIC REGRESSION:%%%%%%%%%%%%%%%%%%%
+#Logistic Regression is one of the classification ML models and we pass the training data through the logistic regression model. family="binomial" as isCanceled is either '0' or '1'.
+```{r}
+logistic_model<-glm(IsCanceled~.,family="binomial",data=dataset3)
+summary(logistic_model)
+```
+
+#I am finding the probability and the class (by defining a threshold value greater than 0.5) found by the logistic regression model.
+```{r}
+logistic_pred_prob <- predict(logistic_model,test_set1,type="response")
+logistic_pred_class <- ifelse(logistic_pred_prob>0.5,"1","0") 
+
+table(test_set1$IsCanceled==logistic_pred_class)
+```
+
+#I am creating a confusion matrix. The accuracy is 84.32%
+```{r}
+library(caret)
+confusionMatrix(as.factor(logistic_pred_class), test_set1$IsCanceled)
+```
+#RANDOM FOREST
+
+#ntree - defines the number of trees to be generated. It is typical to test a range of values for this parameter (i.e. 100,200,300,400,500) and choose the one that minimises the OOB estimate of error rate.
+
+#mtry - is the number of features used in the construction of each tree. These features are selected at random, which is where the “random” in “random forests” comes from. The default value for this parameter, when performing classification, is sqrt(number of features).
+
+#importance - enables the algorithm to calculate variable importance.
+
+#cutoff - Internally, random forest uses a cutoff of 0.5; i.e., if a particular unseen observation has a probability higher than 0.5, it will be classified as positive class. In random forest, we have the option to customize the internal cutoff.
+
+#The Out-Of-Bag (OOB) data set is used to check the accuracy of the model, since the model wasn’t created using this OOB data it will give us a good understanding of whether the model is effective or not.
+```{r}
+#install.packages('randomForest')
+library(randomForest)
+set.seed(100)
+dataset3_rf_features <- training_set1[-9]
+rf_model<-randomForest(IsCanceled~., data=dataset3_rf_features, ntree=500, cutoff=c(0.5,0.5), mtry=2, importance=TRUE)
+rf_model
+```
+
+#The above model gave an error rate of 17.4% on OOB dataset. The below model will try to find the best hyper parameter value for mtry after tuning.
+
+```{r}
+library(dplyr)
+set.seed(100)              
+rf_model2 <- tuneRF(x = dataset3_rf_features%>%select(-IsCanceled),
+              y = dataset3_rf_features$IsCanceled,mtryStart=2,
+              ntreeTry = 500)
+```
+#The model is showing least Out of Bound(OOB) error for mtry=4. Now I am training the model based on the new mtry value.
+```{r}
+rf_model3<-randomForest(IsCanceled~.,              
+                       data=dataset3_rf_features,          
+                       ntree=500,                     
+                       cutoff=c(0.5,0.5), 
+                       mtry=4,
+                       importance=TRUE)
+rf_model3
+```
+
+#After Evaluating the probabilities and the class, the best random forest model gave an accuracy of 85.28% which is the best amongst all the models built.
+```{r}
+rf_pred_prob<-predict(rf_model3,test_set1,type="prob")[,2]   
+rf_pred_class<-predict(rf_model3,test_set1,type="class")
+confusionMatrix(as.factor(rf_pred_class),test_set1$IsCanceled)
+```
+
+#NAIVE BAYES
+#Evaluating the probabilities and class based on Naive Bayes Model
+```{r}
+library(e1071)
+nb_model = naiveBayes(IsCanceled~ ., data = dataset3)
+nb_model
+```
+
+#Evaluating the probabilities and class based on Naive Bayes Model
+```{r}
+nb_pred_prob = predict(nb_model, as.data.frame(test_set1), type = "raw")
+nb_pred = predict(nb_model, as.data.frame(test_set1))
+```
+
+#Evaluating the performance of Naive Bayes Model - Accuracy is 56% majorly because of the class imbalance problem in the dataset. Also, Naive Bayes has performed worse than Logistic Regression and RF.
+```{r}
+confusionMatrix(as.factor(nb_pred),test_set1$IsCanceled)
+```
+
+#Plotting ROC curves show that the Random Forest Model has done the best in predicting if Hotel Bookings will be cancelled or not with an Area Under the Curve (AUC) = 0.908. Note that Sensitivity is True Positive Rate (Recall) and Specificity is True Negative Rate which is (1 - False Positive Rate)
+```{r}
+library(pROC)#to plot ROC curves
+logistic_roc<-roc(test_set1$IsCanceled,logistic_pred_prob,auc=TRUE)
+
+nb_roc<- roc(test_set1$IsCanceled,nb_pred_prob[,2],auc=TRUE)
+
+rf_roc<-roc(test_set1$IsCanceled,rf_pred_prob,auc=TRUE)
+
+plot(rf_roc,print.auc=TRUE,print.auc.y=.1,col="black")
+plot(nb_roc,print.auc=TRUE,print.auc.y=.3, col="red",add=TRUE)
+plot(logistic_roc,print.auc=TRUE,print.auc.y=.4, col="green",add=TRUE)
+
+legend("bottom", legend = c("LR", "RF", "NB"), col = c("green", "black", "red"),lwd = 2,horiz=TRUE)
+```
+#KNN:
+```{r}
+knn_model <- train(IsCanceled~., data=dataset3, method="knn")
+kNN_pred <-predict(knn_model, as.data.frame(test_set1))
+kNN_pred
+```
+
+```{r}
+knn_pred_prob<-predict(knn_model,test_set1,type="prob")  
+knn_pred_class<-predict(knn_model,test_set1,type="class")
+confusionMatrix(as.factor(knn_pred_class),test_set1$IsCanceled)
+```
+
+```{r}
+#vvvvvvimp
+# Table cylinder - transmission type
+sample4 <- dataset1 %>% filter(dataset1$IsCanceled == 1, dataset1$DepositType == 'Non Refund')
+#sample4
+other_table <- table(sample4$MarketSegment)
+
+barplot(other_table,
+        main = "Grouped barchart for IsCanceled = 1 and DepositType = Non Refund",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+ggplot(data = sample4 , aes(LeadTime)) + geom_histogram(binwidth = 10) + facet_wrap(~ IsCanceled) 
+```
+
+```{r}
+total_Country <- dataset1 %>% group_by(Country, IsCanceled) %>% summarize(total=n()) 
+keep <- c("PRT","GBR","ESP","IRL","FRA","DEU","CHN","NLD","USA","ITA")
+total_Country10 <- total_Country[total_Country$Country %in% keep, ]
+col_Country <- ggplot(total_Country10) + aes(x=Country, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Top 10 Countries with more Cancellations")
+col_Country
+```
+```{r}
+sample5 <- dataset1 %>% filter(dataset1$Country %in% keep)
+#sample5
+other_table <- table(sample5$MarketSegment, droplevels(sample5)$Country) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart of the Top 10 Countries for MarketSegment",
+        xlab = "Countries", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        args.legend = list(x = "topright", inset = c(-0.15, 0)),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+other_table <- table(sample5$CustomerType, droplevels(sample5)$Country) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart of the Top 10 Countries for CustomerType",
+        xlab = "Countries", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        args.legend = list(x = "topright", inset = c(-0.15, 0)),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+sample6 <- dataset1 %>% filter(dataset1$CustomerType == 'Transient', dataset1$IsRepeatedGuest == 1)
+sample6
+other_table <- table(sample6$MarketSegment, sample6$IsCanceled) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart",
+        xlab = "Countries", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        args.legend = list(x = "topright", inset = c(-0.15, 0)),
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+#table(dataset1$RequiredCarParkingSpaces)
+sample6 <- dataset1 %>% filter(dataset1$CustomerType == 'Transient')
+#sample6
+other_table <- table(sample6$BookingChanges,sample6$IsCanceled) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart",
+        xlab = "BookingChanges", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet","brown","darkblue","green","black","white","purple","cornsilk3"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        beside = TRUE) # Grouped bars
+```
+
+```{r}
+sample7 <- dataset1 %>% filter(dataset1$BookingChanges == 0, dataset1$IsCanceled == 1)
+sample7
+sample8 <- dataset1 %>% filter(dataset1$BookingChanges == 0, dataset1$IsCanceled == 0)
+sample8
+#install.packages("ggplot2")
+library(ggplot2)
+ggplot(sample7, aes(x=LeadTime))+geom_histogram(color="black", fill="blue",binwidth = 10) + ggtitle("Distribution of LeadTime Variable for first time guests cancelling") + xlab("LeadTime")+ theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(sample8, aes(x=LeadTime))+geom_histogram(color="black", fill="red",binwidth = 10) + ggtitle("Distribution of LeadTime Variable for first time guests not cancelling") + xlab("LeadTime")+ theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
