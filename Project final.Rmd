@@ -1,0 +1,872 @@
+---
+title: "Hotel Cancellation Analysis Code"
+output: pdf_document
+---
+# Intro to Data Science Final Project Code
+##### Copyright Jeffrey Stanton, Jeffrey Saltz, and Jasmina Tacheva
+
+### IST687 Section M003
+#### Professor Anderson
+####
+
+```{r}
+# Team members names: 
+  #David Antonio Garcia Flores
+  #Hrishikesh Mahesh Telang
+  #Priyal Avinash Bamnikar
+  #Liam Hogan
+  #Siddhi Yogesh Bhandari
+```
+
+### Attribution statement: (choose only one and delete the rest)
+
+
+```{r}
+# 1. We did this project by ourselves, with help from the book, the professor and StackOverflow.
+```
+
+## Cleaning Data Set
+
+#In this part of the code we clean the data set. This means, deal with missing values, misspellings, etc.
+```{r}
+#install.packages("writexl")
+#install.packages('rworldmap')
+
+#We enable the packages we'll use
+library(readr);library(tidyverse);library(rpart);library(caret);library(e1071) 
+library(rpart.plot);library(arules);library(arulesViz);library(writexl);library(rworldmap)
+library(kernlab)
+#Import the csv file with the data as a data frame
+dataset1 <- data.frame(read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/Resort01.csv"))
+#we check the structure of the data frame
+str(dataset1)
+#We check if there are missing values for each variable
+sum(is.na(dataset1[,"IsCanceled"]))
+sum(is.na(dataset1[,"LeadTime"]))
+sum(is.na(dataset1[,"StaysInWeekendNights"]))
+sum(is.na(dataset1[,"StaysInWeekNights"]))
+sum(is.na(dataset1[,"Adults"]))
+sum(is.na(dataset1[,"Children"]))
+sum(is.na(dataset1[,"Babies"]))
+sum(is.na(dataset1[,"Meal"]))
+sum(is.na(dataset1[,"Country"]))
+sum(is.na(dataset1[,"MarketSegment"]))
+sum(is.na(dataset1[,"IsRepeatedGuest"]))
+sum(is.na(dataset1[,"PreviousCancellations"]))
+sum(is.na(dataset1[,"PreviousBookingsNotCanceled"]))
+sum(is.na(dataset1[,"ReservedRoomType"]))
+sum(is.na(dataset1[,"AssignedRoomType"]))
+sum(is.na(dataset1[,"BookingChanges"]))
+sum(is.na(dataset1[,"DepositType"]))
+sum(is.na(dataset1[,"CustomerType"]))
+sum(is.na(dataset1[,"RequiredCarParkingSpaces"]))
+sum(is.na(dataset1[,"TotalOfSpecialRequests"]))
+
+#Because some variable are character, we check for null values as character
+#Meal
+sum(dataset1$Meal=='NULL')
+#Market Segment              
+sum(dataset1$MarketSegment=='NULL')
+#Reserved Room Type              
+sum(dataset1$ReservedRoomType=='NULL')
+#Assigned Room Type              
+sum(dataset1$AssignedRoomType=='NULL')
+#Deposit Type             
+sum(dataset1$DepositType=='NULL')
+#Customer Type              
+sum(dataset1$CustomerType=='NULL')
+#Country
+sum(dataset1$Country=='NULL')
+#we saw that just the Country variable have null values
+#we save those observations that have null values in the country variable
+check <- dataset1[dataset1$Country=='NULL',]
+#The null values represent this percentage of the cancellations
+sum(check$IsCanceled==1)/sum(dataset1$IsCanceled==1)*100
+#The null values represent this percentage of the no cancellations
+sum(check$IsCanceled==0)/sum(dataset1$IsCanceled==0)*100
+
+#Because each of the null values represent less than 1.5% of each category, we 
+#erase them 
+dataset1 <- dataset1[dataset1$Country!='NULL',]
+
+#Also, we noticed the country code for China should be changed
+dataset1 %>% mutate(Country = replace(Country, Country=='CN', 'CHN')) -> dataset1
+
+table(dataset1$Country)
+```
+#When we see the structure of the data frame, we notice there are some variables that are character. Then, we replace those variables as factors to better analyze them.
+```{r}
+
+dataset1$IsCanceled <- as.factor(dataset1$IsCanceled)
+dataset1$Meal <- as.factor(dataset1$Meal)
+dataset1$Country <- as.factor(dataset1$Country)
+dataset1$MarketSegment <- as.factor(dataset1$MarketSegment)
+dataset1$IsRepeatedGuest <- as.factor(dataset1$IsRepeatedGuest)
+dataset1$ReservedRoomType <- as.factor(dataset1$ReservedRoomType)
+dataset1$AssignedRoomType <- as.factor(dataset1$AssignedRoomType)
+dataset1$CustomerType <- as.factor(dataset1$CustomerType)
+dataset1$DepositType <- as.factor(dataset1$DepositType)
+
+```
+
+# Analysis One
+
+#Considering this, we create plots of the main categorical variables 
+**1. Market Segment**
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to 
+#the Market Segment 
+total_marketSegment <- dataset1 %>% group_by(MarketSegment, IsCanceled) %>% summarize(total = n())
+total_marketSegment
+col_marketSegment <- ggplot(total_marketSegment) + aes(x=MarketSegment, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2") +
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Market Segment")+
+  xlab("Market Segment")
+  
+col_marketSegment
+
+#From this plot we can see that people in the Direct Market and offline TA/TO 
+#segments have a low rate of cancellation.
+```
+**2. Deposit Type**
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to the Deposit Type 
+total_DepositType <- dataset1 %>% group_by(DepositType, IsCanceled) %>% summarize(total=n()) 
+total_DepositType 
+col_DepositType <- ggplot(total_DepositType) + aes(x=DepositType, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Deposit Type")+
+  xlab("Deposit Type")
+col_DepositType
+
+#from this plot we can see that people that booked and don't have a refund tend to
+#cancel
+```
+**3. Assigned Room Type**
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to the room that was assigned 
+total_AssignedRoomType <- dataset1 %>% group_by(AssignedRoomType, IsCanceled) %>% summarize(total=n()) 
+total_AssignedRoomType 
+col_AssignedRoomType <- ggplot(total_AssignedRoomType) + aes(x=AssignedRoomType, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Assigned Room")+
+  xlab("Assigned Room Type")
+col_AssignedRoomType
+
+#from this plot we can see that room D have some special features that makes people 
+#who book it not to cancel their reservations compared to room A
+```
+**4. Reserved Room Type**
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to the room that was reserved
+total_ReservedRoomType <- dataset1 %>% group_by(ReservedRoomType, IsCanceled) %>% summarize(total=n()) 
+total_ReservedRoomType
+col_ReservedRoomType<- ggplot(total_ReservedRoomType) + aes(x=ReservedRoomType, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Reserved Room")+
+  xlab("Reserved Room Type")
+col_ReservedRoomType
+
+#from this plot we can see that more people have decided to reserve the room A, but it's
+#also those people who have cancelled more times
+```
+**5. Meal Package**
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to the meal plan
+total_Meal <- dataset1 %>% group_by(Meal, IsCanceled) %>% summarize(total=n()) 
+total_Meal 
+col_Meal <- ggplot(total_Meal) + aes(x=Meal, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Meal Package")
+col_Meal
+
+#from this plot we can see that people who had the FB meal plan had more cancellations
+#than non-cancellations
+```
+**6. Whether the person is a Repeated Guest or not**
+
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to if he/she is repeated guest
+total_IsRepeatedGuest <- dataset1 %>% group_by(IsRepeatedGuest, IsCanceled) %>% summarize(total=n()) 
+total_IsRepeatedGuest 
+col_IsRepeatedGuest <- ggplot(total_IsRepeatedGuest) + aes(x=IsRepeatedGuest, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  scale_x_discrete(labels=c("No","Yes"))+
+  ggtitle("Cancellations by if he/she is a Repeated Guest or Not")+
+  xlab("Repeated Guest")
+col_IsRepeatedGuest
+
+#from this plot we can see the majority of people that cancelled was because they were
+#first-time guests
+```
+**7. Customer Type**
+
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to the customer type
+total_CustomerType <- dataset1 %>% group_by(CustomerType, IsCanceled) %>% summarize(total=n()) 
+total_CustomerType
+col_CustomerType<- ggplot(total_CustomerType) + aes(x=CustomerType, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Customer Type")+
+  xlab("Customer Type")
+col_CustomerType
+
+#Those people who are considered transient have more number of cancellations compared
+#with the rest of categories 
+```
+### **World Maps Analysis**
+
+**Average Lead by Country**
+```{r}
+#Now we create a map that plots the average of each country lead time
+avgLT <- dataset1 %>% group_by(Country) %>% summarise(avgLeadTime = mean(LeadTime))
+sPDF <- joinCountryData2Map(avgLT, joinCode = "ISO3", nameJoinColumn = "Country")
+par(mai=c(0,0,0.2,0),xaxs="i",yaxs="i")
+mapCountryData(sPDF, nameColumnToPlot="avgLeadTime", catMethod = "fixedWidth", mapTitle = "Average Lead Time by Country")
+
+#We can see that Asia oriental have a larger lead time on average
+```
+**Cancellation Rate by Country**
+
+```{r}
+#We also plot the cancellation rate by country. This is, we divided the number of
+#cancellations by the number of total reservations
+reserveData <- dataset1 %>% count(Country)
+cancelData <- dataset1 %>% group_by(Country,IsCanceled) %>% summarize(total=n()) %>% filter(IsCanceled==1)%>%rename(totalCancels=total)
+cancelData <- cancelData %>% inner_join(reserveData,by="Country")
+cancelData <- rename(cancelData, totalReservs = n)
+cancelData <- cancelData %>% mutate(crRatio = totalCancels/totalReservs)
+cancelData <- cancelData %>% filter(totalCancels>5)
+cancelsPDF <- joinCountryData2Map(cancelData, joinCode = "ISO3", nameJoinColumn = "Country")
+par(mai=c(0,0,0.2,0),xaxs="i",yaxs="i")
+mapCountryData(cancelsPDF, nameColumnToPlot="crRatio", catMethod = "logFixedWidth", mapTitle = "Cancellation Rate by Country (Greater than 5 Cancellations)")
+
+
+#From this plot we can see we should focus on Portugal and Morocco because they have both a high 
+#cancellation rate and a large amount of reservations
+```
+#We plot the 10 countries that most reserve, because they represent around 90% of all the reservations. Actually, these ten countries represent also the 90% of the cancellations and 90% of the population that didn't cancel
+```{r}
+#we create a plot of total cancellations and non-cancellations respect to these 10 contries 
+total_Country <- dataset1 %>% group_by(Country, IsCanceled) %>% summarize(total=n()) 
+keep <- c("PRT","GBR","ESP","IRL","FRA","DEU","CHE","CHN","BRA","ITA")
+total_Country10 <- total_Country[total_Country$Country %in% keep, ]
+col_Country <- ggplot(total_Country10) + aes(x=Country, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Top 10 Countries with the most Cancellations")
+col_Country
+
+#from this plot we can see that Portugal has a high amount of cancellations, so
+#we have decided to look into Portugal's information to know what is causing this.
+```
+#Based on the previous a few graphics, we know that people with a non-refundable deposit are more probable to cancel. Therefore, we check where those people come from
+```{r}
+noRefund_DepositType <- dataset1 %>% filter(DepositType=="Non Refund")
+#we create a plot of total cancellations and non-cancellations respect to the room that was assigned 
+total_Country_nonrefund <- noRefund_DepositType %>% group_by(Country, IsCanceled) %>% summarize(total=n()) 
+col_Country_nonrefund <- ggplot(total_Country_nonrefund) + aes(x=Country, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Top 10 Countries with the most Cancellations with Deposit Non-Refundable")
+col_Country_nonrefund
+
+#From this plot we can see that people from Portugal that don't have a refund are
+#those people who cancel more their reservations
+```
+#To solve the question **why people from Portugal with no refund cancel their reservations?** we apply a regression tree to see which variables are more important.
+```{r}
+Cancel_noRefund_Portugal <- dataset1 %>% filter(DepositType=="Non Refund") %>% filter(Country=="PRT")
+
+#REGRESSION TREE TO SEE THE VARIABLE IMPORTANCE
+#we create a regression tree considering the five more significant variables
+index_NR_PRT <- createDataPartition(Cancel_noRefund_Portugal$IsCanceled, p=0.75, list=F)
+train_noRefund_Portugal <- Cancel_noRefund_Portugal[index_NR_PRT,]
+test_noRefund_Portugal <- Cancel_noRefund_Portugal[-index_NR_PRT,]
+cancel_noRefund_PRT_Tree <- rpart(IsCanceled ~ ., data = train_noRefund_Portugal, method="class")
+#we plot the decision tree based on the previous model
+rpart.plot(cancel_noRefund_PRT_Tree)
+#we use the testing data set to check our model's performance 
+treePred_noR_PRT <- predict(cancel_noRefund_PRT_Tree, newdata=test_noRefund_Portugal, type="class")
+#we create the confusion matrix to see the accuracy of our model
+confusionMatrix(treePred_noR_PRT,test_noRefund_Portugal$IsCanceled)
+varImp(cancel_noRefund_PRT_Tree)
+
+#However, we see the model is not significant because the  Mcnemar's Test P-Value is more than 0.05
+```
+## Regression trees
+#So, how the previous model wasn't significant. we start creating machine learning models to support our discover that people from Portugal with a Non-Refundable deposit are people we should focus on.
+
+#First, we start creating our training and testing data sets
+```{r}
+#we set the seed because we will use random sampling
+set.seed(111)
+#we create partitions of our data set. One to train the model and the other to test it
+trainList <- createDataPartition(y=dataset1$IsCanceled,p=.75,list=FALSE)
+trainSet <- dataset1[trainList,]
+testSet <- dataset1[-trainList,]
+```
+
+
+#Our first model considers all the variables to create a model that predicts whether
+a person may cancel a reservation or not
+```{r}
+#we create a regression tree
+cancelTree <- rpart(IsCanceled ~ ., data = trainSet, method="class")
+cancelTree
+#we plot the decision tree based on the previous model
+rpart.plot(cancelTree)
+#we use the testing data set to check our model's performance 
+treePred <- predict(cancelTree, newdata=testSet, type="class")
+
+#we create the confusion matrix to see the accuracy of our model
+confusionMatrix(treePred,testSet$IsCanceled)
+
+#we can see the model is significant because the Mcnemar's Test P-Value is less 
+#than 0.05. This model have an accuracy of 81.43%, which means the model predicted
+#correctly that percentage of cases with the new data set.
+#Moreover, if we compare sensitivity and specificity, we can conclude that the model
+#is better predicting when a person won't cancel (91.08% of the cases) than predicting
+#when that person will cancel (56.59% of the cases)
+
+
+#We check the importance of the variables 
+varImp(cancelTree)
+
+#We can see there are variables that doesn't influence how the model predicts whether 
+#a person will cancel or not. These are: Adults, Children, Babies, IsRepeatedGuest, 
+#ReservedRoomType, CustomerType, TotalOfSpecialRequests, PreviousBookingsNotCanceled.
+#In this case, we decide to exclude those variables. Also, what we can see is 
+#the 5 most important variables are LeadTime, RequiredCarParkingSpaces, MarketSegment, 
+#Country, DepositType
+
+```
+```{r}
+#we create a regression tree considering the five more significant variables
+cancelTree2 <- rpart(IsCanceled ~ LeadTime + RequiredCarParkingSpaces + 
+                       MarketSegment + Country + DepositType, data = trainSet, method="class")
+#we plot the decision tree based on the previous model
+rpart.plot(cancelTree2)
+#we use the testing data set to check our model's performance 
+treePred2 <- predict(cancelTree2, newdata=testSet, type="class")
+#we create the confusion matrix to see the accuracy of our model
+confusionMatrix(treePred2,testSet$IsCanceled)
+
+#we can see the model is significant because the Mcnemar's Test P-Value is less 
+#than 0.05. This model have an accuracy of 81.31%, which is just 0.12% less than
+#the previous model. Moreover, if we compare sensitivity and specificity, we can 
+#conclude that the model is better predicting when a person will cancel 
+#(57.35% of the cases) compared to the previous model, but a little worse when
+#predicting when a person won't cancel (90.62% of the cases)
+
+```
+#Now we create a more complex regression tree with cross validation to support what we have found
+```{r}
+#We can see there are variables that doesn't influence the result.
+#These are: Adults, Children, Babies, IsRepeatedGuest, ReservedRoomType,
+#CustomerType, TotalOfSpecialRequests, PreviousBookingsNotCanceled
+trctrl <- trainControl(method="repeatedcv", number=10)
+cross.rpart <- train(IsCanceled ~ ., method = "rpart",
+                     data = trainSet,
+                     trControl=trctrl,
+                     tuneLength = 50)
+cross.rpart
+rpart.plot(cross.rpart$finalModel)
+cross.rpart_pred <- predict(cross.rpart, newdata=testSet)
+#we create the confusion matrix to see the accuracy of our model
+confusionMatrix(cross.rpart_pred,testSet$IsCanceled)
+varImp(cross.rpart)
+
+#we can see from the variable importance that an important factor to know if people are 
+#going to cancel is if they come from Portugal, they have a non-refundable deposit, and 
+#customer is transient. Therefore, this model supports our idea that people from Portugal and 
+#with a non-refundable deposit have a high probability to cancel
+
+```
+## Association Rules
+#Now, we will use associative rules to see what characteristics have the people that cancel because they have a deposit non-refundable and come from Portugal
+```{r}
+#we create a new data frame with the categorical variables
+data_NR_PRT <- Cancel_noRefund_Portugal[,c("Meal", "MarketSegment",
+                       "IsRepeatedGuest", "CustomerType", "ReservedRoomType", 
+                       "AssignedRoomType", "IsCanceled")]
+
+#we create a transaction matrix with the categorical variables information
+trans_NR_PRT <- as(data_NR_PRT, "transactions")
+
+
+#we create association rules for people that have cancelled 
+rules_cancel_NR_PRT <- apriori(trans_NR_PRT, parameter = list(supp=0.005, conf= 0.8), 
+                  appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                  control=list(verbose=F))
+summary(rules_cancel_NR_PRT)
+inspect(rules_cancel_NR_PRT)
+
+#In this part, we export the association rules to a Excel file 
+a_rules_cancel_NR_PRT <- data.frame(
+       lhs = labels(lhs(rules_cancel_NR_PRT)),
+       rhs = labels(rhs(rules_cancel_NR_PRT)), 
+       rules_cancel_NR_PRT@quality)
+write_xlsx(a_rules_cancel_NR_PRT, "rules_cancel_NR_PRT.xlsx")
+
+```
+
+
+```{r}
+#We can see from the association rules that transient customers are those people that 
+#cancel more, so we check what percentage of the cancellations would be solved  
+#if we focus on these group of people.
+sum(Cancel_noRefund_Portugal$CustomerType=="Transient" & Cancel_noRefund_Portugal$IsCanceled=="1")/sum(dataset1$IsCanceled=="1")*100
+
+#All the previous information suggest we should focus on people that come from Portugal,
+#have a non-refundable deposit and are considered as transients. This because they
+#represent 12.67% of all the cancellations in the dataset
+```
+# Analysis two
+
+#Based on the regression tree called **cancelTree** we saw that some variables are more important to consider for example Lead Time, RequiredCarParkingSpaces, and BookingChanges. 
+
+#For these variables, the model suggest that lead time should be separated into two groups. Those that have a lead time above 19 and those that have it less than that. 
+
+#Those that need parking spaces and those that don't
+
+#Those that have made booking changes and those that haven't
+```{r}
+#First, we make a copy of our dataset
+dataset2 <- dataset1
+#Then, we create a new variable that splits reservations based on lead time 
+dataset2$LeadTime_c <- "short"
+dataset2$LeadTime_c[dataset1$LeadTime>19] <- "large"
+#in this part, we create a new variable that splits reservations based on Parking spaces
+dataset2$Parking <- "no"
+dataset2$Parking[dataset1$RequiredCarParkingSpaces>0] <- "yes"
+#Then, we create a new variable that splits reservations based on booking changes
+dataset2$BookingChanges_c <- "no"
+dataset2$BookingChanges_c[dataset1$BookingChanges>0] <- "yes"
+
+#Finally, we convert those new variables to factors to better analyze them
+dataset2$LeadTime_c <- as.factor(dataset2$LeadTime_c)
+dataset2$Parking <- as.factor(dataset2$Parking)
+dataset2$BookingChanges_c <- as.factor(dataset2$BookingChanges_c)
+
+```
+
+#Now, we create a plot that shows how the people behaves based on short and large lead times, that is to say, we analyze how the number of cancellations are
+```{r}
+total_Leadtime <- dataset2 %>% group_by(LeadTime_c, IsCanceled) %>% summarize(total=n()) 
+total_Leadtime
+col_LeadTime<- ggplot(total_Leadtime) + aes(x=LeadTime_c, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Lead Time")+
+  xlab("Lead Time")
+col_LeadTime
+
+
+#From this plot we can see that people with a large lead time tend to cancel more 
+#than those ones with a short lead time
+```
+#We also plot the number of parking spaces a person needs to see how the cancellations behave
+```{r}
+total_Parking <- dataset2 %>% group_by(Parking, IsCanceled) %>% summarize(total=n()) 
+total_Parking
+col_Parking<- ggplot(total_Parking) + aes(x=Parking, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations by Parking Spaces")+
+  xlab("Parking Spaces")
+col_Parking
+
+#We can see in this plot that people that don't require parking spaces cancelled 
+#all the times
+```
+#Now that we saw this behavior we would like to know why people with no parking spaces cancel all the times, so we create a plot for these people and separated by lead time
+```{r}
+NoParking_leadtime <- dataset2 %>% filter(Parking=="no")
+total_NoParking_leadtime <- NoParking_leadtime %>% group_by(LeadTime_c, IsCanceled) %>% summarize(total=n()) 
+total_NoParking_leadtime
+col_NoParking_leadtime<- ggplot(total_NoParking_leadtime) + aes(x=LeadTime_c, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations with No Parking Spaces")+
+  xlab("Lead Time")
+col_NoParking_leadtime
+
+#We can see that most people that don't require parking spaces had a large lead time
+```
+#Now we will focus on people with large lead time and no parking spaces to see which market segment is causing this behavior
+```{r}
+NoP_LargeLT <- NoParking_leadtime %>% filter(LeadTime_c=="large") 
+total_NP_LT_market <- NoP_LargeLT %>% group_by(MarketSegment, IsCanceled) %>% summarize(total=n()) 
+total_NP_LT_market
+col_NP_LT_market<- ggplot(total_NP_LT_market) + aes(x=MarketSegment, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations of No Parking and Large Lead Time by Market Segment")+
+  xlab("Market Segment")
+col_NP_LT_market
+
+#from this plot we can see that people in the online TA market segment are our target 
+#group because they have a large amount of cancellations
+```
+#Now, we would like to know why this people are cancelling. In other words, **why people with large lead time, no parking spaces, and from the Online TA market segment cancel?**. To solve this question we want to know if the number of booking changes they have made influence the cancellations
+```{r}
+NoP_LargeLT_Online <- NoP_LargeLT %>% filter(MarketSegment=="Online TA") 
+total_NP_LT_O_c <- NoP_LargeLT_Online %>% group_by(BookingChanges_c, IsCanceled) %>% summarize(total=n()) 
+total_NP_LT_O_c
+col_NP_LT_O_c<- ggplot(total_NP_LT_O_c) + aes(x=BookingChanges_c, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations of No Parking, Large Lead Time and Online TA")+
+  xlab("Booking Changes")
+col_NP_LT_O_c
+
+
+#As we can see from this plot, people with those characteristics didn't have booking 
+#changes at all
+```
+#With all this informatino we would like to know if the customer type influences the behavior of cancellations 
+```{r}
+NoP_LargeLT_O_NB <- NoP_LargeLT_Online %>% filter(BookingChanges_c=="no") 
+total_NP_LT_O_trans <- NoP_LargeLT_O_NB %>% group_by(CustomerType, IsCanceled) %>% summarize(total=n()) 
+total_NP_LT_O_trans
+col_NP_LT_O_trans<- ggplot(total_NP_LT_O_trans) + aes(x=CustomerType, y=total) +
+  geom_col(aes(fill=IsCanceled), position="dodge2")+
+  scale_fill_discrete(name="Cancellation Status",
+                      breaks=c(0,1),
+                      labels=c("Not Cancelled","Cancelled"))+
+  ggtitle("Cancellations of No Parking, Large Lead Time, Online TA, and No Changes")+
+  xlab("Customer Type")
+col_NP_LT_O_trans
+
+
+
+#We can see that people that are transient are that group of people we should focus on 
+#because they cancell a lot
+```
+#Now that we know that people with a large lead time, no parking spaces, from the Online TA market segment, that haven't made booking changes, and are considered transient have a large amount of cancellations we will create association rules to know what is causing these people to cancel their reservations.
+
+```{r}
+NoP_LargeLT_O_trans <- NoP_LargeLT_O_NB %>% filter(CustomerType=="Transient") 
+sum(NoP_LargeLT_O_trans$IsCanceled=="1")/sum(dataset1$IsCanceled=="1")*100
+
+#Actually as we can see this group of people represent 44.23% of all the cancellations
+#in the data set
+```
+
+### Association RUles
+```{r}
+
+data_NoP_LargeLT_Online <- NoP_LargeLT_O_trans[,c("LeadTime_c", "Parking","Meal", "MarketSegment","IsRepeatedGuest", "CustomerType", "ReservedRoomType", "AssignedRoomType", "IsCanceled")]
+
+#we create a transaction matrix with the categorical variables information
+trans_NP_LT_online <- as(data_NoP_LargeLT_Online, "transactions")
+
+
+#we create association rules for people that have cancelled 
+rules_NP_LT_online <- apriori(trans_NP_LT_online, parameter = list(supp=0.005, conf= 0.5), 
+                            appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                            control=list(verbose=F))
+summary(rules_NP_LT_online)
+inspect(rules_NP_LT_online)
+
+#In this part, we export the association rules to a Excel file 
+a_rules_NP_LT_online <- data.frame(
+  lhs = labels(lhs(rules_NP_LT_online)),
+  rhs = labels(rhs(rules_NP_LT_online)), 
+  rules_NP_LT_online@quality)
+write_xlsx(a_rules_NP_LT_online, "rules_NP_LT_online.xlsx")
+```
+
+
+# Analysis Three
+
+#Firstly, we start analyzing 
+
+#We can observe that the bookings are the highest when done through an online Travel Agent. It also guarantees that through online travel agents, there is a greater probability of no cancellations.
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$MarketSegment, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for MarketSegment",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red", "green", "yellow", "orange"),
+        legend.text = rownames(other_table),
+        legend="topleft",
+        beside = TRUE) # Grouped bars
+
+```
+#There is a higher probability of customers to not cancel their booking if the deposit type is no deposit as compared to something that is non-refundable.
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$DepositType, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for DepositType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("darkgrey", "darkblue", "red"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+```
+```{r}
+# Table cylinder - transmission type
+other_table <- table(dataset1$DepositType, dataset1$IsCanceled)
+# other_table <- xtabs(~cyl + am , data = mtcars) # Equivalent
+
+barplot(other_table,
+        main = "Grouped barchart for DepositType",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("blue", "red", "green"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+
+```
+
+```{r}
+# Table cylinder - transmission type
+sample4 <- dataset1 %>% filter(dataset1$IsCanceled == 1, dataset1$DepositType == 'Non Refund')
+#sample4
+other_table <- table(sample4$MarketSegment)
+
+barplot(other_table,
+        main = "Grouped barchart for IsCanceled = 1 and DepositType = Non Refund",
+        xlab = "IsCancelled", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet"),
+        legend.text = rownames(other_table),
+        beside = TRUE) # Grouped bars
+
+```
+
+```{r}
+sample5 <- dataset1 %>% filter(dataset1$Country %in% keep)
+#sample5
+other_table <- table(sample5$MarketSegment, droplevels(sample5)$Country) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart of the Top 10 Countries for MarketSegment",
+        xlab = "Countries", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan", "grey","violet"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        args.legend = list(x = "topright", inset = c(-0.15, 0)),
+        beside = TRUE) # Grouped bars
+
+```
+
+```{r}
+other_table <- table(sample5$CustomerType, droplevels(sample5)$Country) 
+#table(droplevels(sample5)$Country)
+
+barplot(other_table,
+        main = "Grouped barchart of the Top 10 Countries for CustomerType",
+        xlab = "Countries", ylab = "Frequency",
+        col = c("yellow", "red", "orange", "cyan"),
+        #legend.text = rownames(other_table),
+        legend.text = TRUE, 
+        args.legend = list(x = "topright", inset = c(-0.15, 0)),
+        beside = TRUE) # Grouped bars
+
+```
+```{r}
+boxplot(DepositType ~ IsCanceled, data = dataset1)
+
+```
+
+```{r}
+boxplot(CustomerType ~ IsCanceled, data = dataset1)
+
+```
+
+```{r}
+boxplot(IsRepeatedGuest ~ IsCanceled, data = dataset1)
+
+```
+
+```{r}
+boxplot(Meal ~ IsCanceled, data = dataset1)
+
+```
+
+```{r}
+#seems useful
+boxplot(Country ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+#seems like a useful predictor
+boxplot(LeadTime ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(StaysInWeekendNights ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(StaysInWeekNights ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(Adults ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(Children ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(Babies ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(BookingChanges ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+boxplot(TotalOfSpecialRequests ~ IsCanceled, data = dataset1)
+```
+```{r}
+
+boxplot(MarketSegment ~ IsCanceled, data = dataset1)
+```
+
+```{r}
+data_new <- data.frame(dataset1$Meal, dataset1$Country, dataset1$MarketSegment,
+                       dataset1$IsRepeatedGuest, dataset1$ReservedRoomType, dataset1$AssignedRoomType, dataset1$DepositType, dataset1$CustomerType, dataset1$IsCanceled)
+colnames(data_new) <- c('Meal','Country','MarketSegment', 'IsRepeatedGuest', 'ReservedRoomType', 'AssignedRoomType', 'DepositType', 'CustomerType', 'IsCanceled')
+data_new
+dataX <- as(data_new, "transactions")
+dataX
+```
+
+```{r}
+itemFrequency(dataX)
+itemFrequencyPlot(dataX, topN=25)
+```
+
+```{r}
+inspect(dataX[1:10]) 
+```
+
+#Some interesting insights can be acquired from the following association rule mining:
+#The cancellations are highest when:
+#1. The way to pay the deposit is non-refundable, which makes sense as deposits being non-refundable prove to be a loss for the customers in case if they were to cancel the last minute. Cancellations are of higher probability when market segment is essentially in a group. This also makes sense because if someone from the group backs out in the last minute, all the bookings of the rooms need to be cancelled.
+#2. The assigned Room Types are A. This could be the case because Rooms A are not generally the most preferred category of rooms, thus when all other rooms get booked, they assign the A room type. The reserved room type also is A. It could probably mean that A room type has traditionally been horrible in terms of living or provide poor service. This ties extremely well when deposit is non-refundable. This is probably because the customers are at a major disadvantage in case if the room is bad and if they want to leave the hotel, and that the hotel is not kind enough to give refund.
+#3. When the meal booked is half board or bed and breakfast. There is a chance that the BB plan is too minimal and might be extra costly for the customer to eat a la carte. Also HB meals might not be providing the best options for customers that lead to cancellations.
+#4. The maximum cancellations have been made in Portugal. This could happen because the travel route to Portugal might be the most inconvenient in that the transit points are too much, or the air tickets could be very expensive. It is also possible that Portugal provides HB and BB meals with extra taxes that are not inclusive
+#5. When customer type is transient (walk-in guests, last minute or bookers or simply people that require a very short term stay in a hotel). I believe that transient customers expect cheap services as they are living only for a short duration of stay.
+#6. Some instances of meal plans in Portugal provide full board meal plans when customers group book.I can also observe that when customers go in groups, they go with certain non-negotiable basic demands, which are not being met by the hotels, such as non refundable deposits which are too huge a loss for the customers to bear.
+#7. In Many of these transactions, there are 0 Repeated Guests. This means that these guests are very new to whichever hotel they have booked. This proves disadvantageous to the hotels especially in countries like Portugal as they are potentially suffering huge losses.
+```{r}
+#remember the values for support and confidence
+rules <- apriori(data_new, parameter = list(supp=0.008, conf= 0.96), 
+                  appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                  control=list(verbose=F))
+summary(rules)
+inspect(rules)
+```
+#The cancellations are lowest when:
+#1. Customers are Britons (from the UK). It is possibly because the economy base being stronger helps them to come to relatively poorer nations like Portugal to spend lavishly on items.
+#2. Rooms D seem to be the most preferred by the customers, that eventually lead to no cancellations
+#3. When there are no deposits (customers love not to owe hotel any charges)
+#4. There is a higher customer satisfaction rate if a new customer enters a hotel, reserves an A type room and gets D instead. 
+```{r}
+rules2 <- apriori(data_new, parameter = list(supp=0.07, conf= 0.9), 
+                  appearance=list(default="lhs", rhs="IsCanceled=0"), 
+                  control=list(verbose=F))
+summary(rules2)
+inspect(rules2)
+```
+
+```{r}
+sample3 <- data_new %>% filter(data_new$Meal == 'BB', data_new$DepositType == "No Deposit")
+sample3
+```
+
+```{r}
+sample3X <- as(sample3, "transactions")
+sample3X
+```
+
+```{r}
+sample3X_rules <- apriori(data_new, parameter = list(supp=0.008, conf= 1), 
+                  appearance=list(default="lhs", rhs="IsCanceled=1"), 
+                  control=list(verbose=F))
+summary(sample3X_rules)
+inspect(sample3X_rules)
+```
+
+### Support Vector Machines
+```{r}
+#KSVM
+
+library(kernlab)
+svm_model<-ksvm(IsCanceled~.,data=trainSet,C=5,cross=3,prob.model=TRUE)
+#Creates a model using KSVM (Support Vector Machine), with cost 5 and cross
+#validations as 3.It is a tool for classification,regression etc
+```
+```{r}
+svm_model
+#not a bad model after all!
+#Training error : 0.102655 
+#Cross validation error : 0.126182 
+#both are pretty close
+```
+
+```{r}
+pred_Out<-predict(svm_model,testSet)
+#using the model KSVM on the testing dataset by using the predict() function to
+#predict Good and Bad values using the svm_model
+pred_Out
+```
+
+```{r}
+str(pred_Out)
+```
+
+```{r}
+con_matrix_ksvm<-confusionMatrix(pred_Out,testSet$IsCanceled)
+
+con_matrix_ksvm
+# ksvm ends
+```
+
+
